@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #050a18;
+  --color-foreground: #ffffff;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif-display);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: #050a18;
+  color: #ffffff;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide scrollbar but keep scrolling */
+::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+}
