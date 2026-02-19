@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shader Effects – Pure Poker Design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000000;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .cards-container {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 40px;
+      padding: 40px;
+      flex-wrap: wrap;
+    }
+
+    .effect-card {
+      width: 320px;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0px 12px 24px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .effect-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0px 16px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    .card-image-wrapper {
+      position: relative;
+      width: 296px;
+      height: 296px;
+      margin: 12px auto 0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    /* Gradient base layer for Card 2 only */
+    .card-image-wrapper.card-2::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, #6b7782 0%, #123552 46%, #000000 100%);
+      border-radius: 12px;
+      z-index: 1;
+    }
+
+    .card-image-wrapper canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+    }
+
+    /* Card 2 canvas sits on top of gradient */
+    .card-image-wrapper.card-2 canvas {
+      position: relative;
+      z-index: 2;
+    }
+
+    .card-text {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 14px 20px 18px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: #000000;
+      text-align: center;
+      letter-spacing: -0.2px;
+      line-height: 1.4;
+    }
+
+    .card-author {
+      font-size: 10px;
+      font-weight: 500;
+      color: #007AFF;
+      text-align: center;
+      letter-spacing: -0.2px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 720px) {
+      .cards-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 32px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="cards-container">
+    <!-- Card 1: Dither effect #1 — Repel interaction -->
+    <div class="effect-card">
+      <div class="card-image-wrapper card-1">
+        <canvas id="canvas1"></canvas>
+      </div>
+      <div class="card-text">
+        <p class="card-title">Dither effect #1: Creation of Adam</p>
+        <p class="card-author">Made by @itsjulespark</p>
+      </div>
+    </div>
+
+    <!-- Card 2: Dither effect #2 — Placeholder canvas (interaction TBD) -->
+    <div class="effect-card">
+      <div class="card-image-wrapper card-2">
+        <canvas id="canvas2"></canvas>
+      </div>
+      <div class="card-text">
+        <p class="card-title">Dither effect #2: Interactive Poker Pixels</p>
+        <p class="card-author">Made by @itsjulespark</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // Shared helpers
+    // =========================================================================
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    function samplePixels(img, size) {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = size;
+      offscreen.height = size;
+      const ctx = offscreen.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      return ctx.getImageData(0, 0, size, size);
+    }
+
+    // =========================================================================
+    // Card 1: Repel Dither – Creation of Adam
+    // =========================================================================
+    (async function initCard1() {
+      const canvas = document.getElementById('canvas1');
+      const wrapper = canvas.parentElement;
+      const ctx = canvas.getContext('2d');
+
+      const SIZE = 296;
+      const DPR = window.devicePixelRatio || 1;
+      canvas.width = SIZE * DPR;
+      canvas.height = SIZE * DPR;
+      canvas.style.width = SIZE + 'px';
+      canvas.style.height = SIZE + 'px';
+      ctx.scale(DPR, DPR);
+
+      // --- Tuned parameters ---
+      const GRID = 3;
+      const COLS = Math.floor(SIZE / GRID);
+      const ROWS = Math.floor(SIZE / GRID);
+      const INTERACTION_RADIUS = 50;
+      const STIFFNESS = 0.12;
+      const DAMPING = 0.8;
+      const REPEL_FORCE = 3;
+
+      // --- Composite the image exactly as Figma shows it ---
+      // 1. Draw gradient  2. Draw image at 50% opacity on top
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = SIZE;
+      compositeCanvas.height = SIZE;
+      const compCtx = compositeCanvas.getContext('2d');
+
+      // Draw gradient background
+      const grad = compCtx.createLinearGradient(0, 0, 0, SIZE);
+      grad.addColorStop(0, '#6b7782');
+      grad.addColorStop(0.46154, '#123552');
+      grad.addColorStop(1, '#000000');
+      compCtx.fillStyle = grad;
+      compCtx.fillRect(0, 0, SIZE, SIZE);
+
+      // Draw image at 50% opacity
+      const img = await loadImage('public/creation-of-adam.png');
+      compCtx.globalAlpha = 0.5;
+      compCtx.drawImage(img, 0, 0, SIZE, SIZE);
+      compCtx.globalAlpha = 1.0;
+
+      // Sample the final composited pixels
+      const compositeData = compCtx.getImageData(0, 0, SIZE, SIZE);
+      const pixels = compositeData.data;
+
+      // Build particles — each is a small square tile
+      const particles = [];
+      for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+          const originX = col * GRID;
+          const originY = row * GRID;
+
+          // Sample center of the grid cell
+          const sx = Math.min(Math.floor(originX + GRID / 2), SIZE - 1);
+          const sy = Math.min(Math.floor(originY + GRID / 2), SIZE - 1);
+          const i = (sy * SIZE + sx) * 4;
+
+          particles.push({
+            originX, originY,
+            x: originX, y: originY,
+            vx: 0, vy: 0,
+            r: pixels[i],
+            g: pixels[i + 1],
+            b: pixels[i + 2],
+          });
+        }
+      }
+
+      // Mouse tracking
+      let mouse = { x: -9999, y: -9999 };
+
+      wrapper.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = SIZE / rect.width;
+        const scaleY = SIZE / rect.height;
+        mouse.x = (e.clientX - rect.left) * scaleX;
+        mouse.y = (e.clientY - rect.top) * scaleY;
+      });
+
+      wrapper.addEventListener('mouseleave', () => {
+        mouse.x = -9999;
+        mouse.y = -9999;
+      });
+
+      // Animation loop
+      function animate() {
+        // Clear to dark base
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, SIZE, SIZE);
+
+        for (const p of particles) {
+          // Distance from particle center to mouse
+          const pcx = p.x + GRID / 2;
+          const pcy = p.y + GRID / 2;
+          const dx = pcx - mouse.x;
+          const dy = pcy - mouse.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          // Repulsion
+          if (dist < INTERACTION_RADIUS && dist > 0) {
+            const force = (1 - dist / INTERACTION_RADIUS) * REPEL_FORCE;
+            const angle = Math.atan2(dy, dx);
+            p.vx += Math.cos(angle) * force;
+            p.vy += Math.sin(angle) * force;
+          }
+
+          // Spring back
+          p.vx += (p.originX - p.x) * STIFFNESS;
+          p.vy += (p.originY - p.y) * STIFFNESS;
+
+          // Damping
+          p.vx *= DAMPING;
+          p.vy *= DAMPING;
+
+          // Update
+          p.x += p.vx;
+          p.y += p.vy;
+
+          // Draw as filled rectangle (tiles seamlessly at rest)
+          ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+          ctx.fillRect(p.x, p.y, GRID, GRID);
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+    })();
+
+    // =========================================================================
+    // Card 2: Static Dither Render with mouse tracking (interaction TBD)
+    // =========================================================================
+    (async function initCard2() {
+      const canvas = document.getElementById('canvas2');
+      const wrapper = canvas.parentElement;
+      const ctx = canvas.getContext('2d');
+
+      const SIZE = 296;
+      const DPR = window.devicePixelRatio || 1;
+      canvas.width = SIZE * DPR;
+      canvas.height = SIZE * DPR;
+      canvas.style.width = SIZE + 'px';
+      canvas.style.height = SIZE + 'px';
+      ctx.scale(DPR, DPR);
+
+      const GRID = 5;
+      const COLS = Math.floor(SIZE / GRID);
+      const ROWS = Math.floor(SIZE / GRID);
+
+      // Load image and sample
+      const img = await loadImage('public/dither-bg.png');
+      const imageData = samplePixels(img, SIZE);
+      const pixels = imageData.data;
+
+      // Build particles
+      const particles = [];
+      for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+          const originX = col * GRID + GRID / 2;
+          const originY = row * GRID + GRID / 2;
+
+          const px = Math.floor(originX);
+          const py = Math.floor(originY);
+          const i = (py * SIZE + px) * 4;
+          const r = pixels[i];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+          const a = pixels[i + 3];
+
+          const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+          const maxRadius = GRID * 0.48;
+          const radius = maxRadius * (1 - brightness * 0.6);
+
+          particles.push({
+            originX, originY,
+            x: originX, y: originY,
+            vx: 0, vy: 0,
+            radius,
+            r, g, b, a,
+            brightness,
+          });
+        }
+      }
+
+      // Mouse tracking (wired up, ready for future interaction)
+      let mouse = { x: -9999, y: -9999 };
+
+      wrapper.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+      });
+
+      wrapper.addEventListener('mouseleave', () => {
+        mouse.x = -9999;
+        mouse.y = -9999;
+      });
+
+      // Gradient background colors (matching Figma)
+      function getGradientColor(y) {
+        const t = y / SIZE;
+        let r, g, b;
+        if (t < 0.46) {
+          const lt = t / 0.46;
+          r = Math.floor(107 + (18 - 107) * lt);
+          g = Math.floor(119 + (53 - 119) * lt);
+          b = Math.floor(130 + (82 - 130) * lt);
+        } else {
+          const lt = (t - 0.46) / 0.54;
+          r = Math.floor(18 + (0 - 18) * lt);
+          g = Math.floor(53 + (0 - 53) * lt);
+          b = Math.floor(82 + (0 - 82) * lt);
+        }
+        return { r, g, b };
+      }
+
+      // Static render (no interaction yet — draw once)
+      function render() {
+        // Draw gradient background
+        for (let y = 0; y < SIZE; y++) {
+          const gc = getGradientColor(y);
+          ctx.fillStyle = `rgb(${gc.r},${gc.g},${gc.b})`;
+          ctx.fillRect(0, y, SIZE, 1);
+        }
+
+        for (const p of particles) {
+          if (p.radius > 0.3) {
+            const gc = getGradientColor(p.originY);
+            const alpha = 0.4 * (p.a / 255); // 40% opacity per Figma
+            const finalR = Math.floor(gc.r * (1 - alpha) + p.r * alpha);
+            const finalG = Math.floor(gc.g * (1 - alpha) + p.g * alpha);
+            const finalB = Math.floor(gc.b * (1 - alpha) + p.b * alpha);
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgb(${finalR},${finalG},${finalB})`;
+            ctx.fill();
+          }
+        }
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
