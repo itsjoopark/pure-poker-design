@@ -8,7 +8,6 @@ export default function AsciiBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mouseRef = useRef({ x: -1000, y: -1000 });
   const animFrameRef = useRef<number>(0);
-  const timeRef = useRef(0);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     const fontSize = 14;
@@ -27,8 +26,7 @@ export default function AsciiBackground() {
 
     const mx = mouseRef.current.x;
     const my = mouseRef.current.y;
-    const time = timeRef.current;
-    const interactionRadius = 200;
+    const interactionRadius = 350;
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -45,22 +43,14 @@ export default function AsciiBackground() {
         // Base gradient brightness: subtle glow from center
         let brightness = Math.max(0, 0.15 - normalizedDist * 0.12);
 
-        // Add very subtle ambient wave
-        brightness += Math.sin(col * 0.08 + time * 0.4) * 0.015;
-        brightness += Math.cos(row * 0.06 + time * 0.3) * 0.015;
-
-        // Cursor interaction
+        // Cursor interaction — static, no animation
         const distFromMouse = Math.sqrt((x - mx) ** 2 + (y - my) ** 2);
         if (distFromMouse < interactionRadius) {
           const proximity = 1 - distFromMouse / interactionRadius;
-          const easedProximity = proximity * proximity * proximity;
+          const easedProximity = proximity * proximity; // quadratic falloff
 
-          // Brighten significantly near cursor
-          brightness += easedProximity * 0.8;
-
-          // Add ripple rings
-          const ringPhase = distFromMouse * 0.04 - time * 2.5;
-          brightness += Math.sin(ringPhase) * easedProximity * 0.2;
+          // Subtle static brightening near cursor
+          brightness += easedProximity * 0.35;
         }
 
         // Clamp brightness
@@ -72,14 +62,14 @@ export default function AsciiBackground() {
 
         if (charIndex === 0) continue; // Skip spaces for performance
 
-        // Color: blue-tinted for base, brighter white near cursor
+        // Color: stays close to base blue tint, slight warmth near cursor
         const cursorInfluence = distFromMouse < interactionRadius
           ? (1 - distFromMouse / interactionRadius) ** 2
           : 0;
 
-        const r = Math.floor(30 + cursorInfluence * 180 + brightness * 40);
-        const g = Math.floor(50 + cursorInfluence * 200 + brightness * 60);
-        const b = Math.floor(120 + cursorInfluence * 135 + brightness * 80);
+        const r = Math.floor(30 + cursorInfluence * 60 + brightness * 40);
+        const g = Math.floor(50 + cursorInfluence * 70 + brightness * 60);
+        const b = Math.floor(120 + cursorInfluence * 50 + brightness * 80);
         const alpha = 0.3 + brightness * 0.7;
 
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -118,7 +108,6 @@ export default function AsciiBackground() {
     window.addEventListener('mouseleave', handleMouseLeave);
 
     const animate = () => {
-      timeRef.current += 0.016;
       const dpr = window.devicePixelRatio || 1;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       draw(ctx, window.innerWidth, window.innerHeight);
